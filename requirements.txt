@@ -1,0 +1,8 @@
+python-telegram-bot
+google-generativeai
+feedparser
+python-dotenv
+flask
+gspread
+oauth2client
+gunicorn
