@@ -67,51 +67,70 @@ def generate_digest_feed(clusters):
     # Prepare input text for Gemini
     # Limit to top 20 clusters to avoid token limits if necessary, or just send all if manageable.
     # For now, let's take top 30 clusters.
-    input_text = ""
-    for i, cluster in enumerate(clusters[:30]):
-        input_text += f"\nCluster {i+1}:\n"
-        for art in cluster:
-            input_text += f"- Title: {art['title']}\n  Link: {art['link']}\n  Source: {art.get('source', 'Unknown')}\n"
-
     try:
         model = genai.GenerativeModel('gemini-pro')
         
-        prompt = f"""
-        Act as a senior editor for a UPSC/Civil Services exam preparation portal.
+        # ... (Prompt construction logic remains, but we need to ensure input_text is defined) ...
+        # Retrying the prompt construction inside the try block to handle retries cleanly would be better, 
+        # but for now let's just wrap the generation.
         
-        I will provide you with clusters of news articles. Each cluster contains multiple reports on the same event from different sources.
+        # Actually, let's extract the generation to a helper or just do the retry logic here.
+        # Original prompt construction uses 'input_text' which was built above. 
+        # We need to rebuild input_text if we want to shrink it.
         
-        Your Task:
-        1. **Filter**: Ignore clusters that are completely irrelevant for UPSC/SSC/Bank exams (e.g., local crime, pure political blame-games, sports trivialities).
-        2. **Synthesize**: For each relevant cluster, write a SINGLE "Master Headline" that combines the key facts from all sources in that cluster. 
-           - Example: If Source A says "India grows 7%" and Source B says "IMF praises India's reforms", Master Headline: "IMF praises India's reforms; forecasts 7% growth."
-           - **Crucial**: Include the LINK to the best 1-2 articles (preferably official sources like PIB/IMF if present) in Markdown format `[Source Name](URL)`.
-        3. **Categorize**: Group these Master Headlines under these themes:
-           - 🏛️ Polity & Governance
-           - 💰 Economy & Banking
-           - 🌍 International Relations
-           - 🔬 Science & Technology
-           - 🌱 Environment
-           - 🛡️ Defence & Security
-           - 🏫 Society & Education
-           - ⚖️ Legal & Constitutional
-           
-        Format:
-        Return the output in clean Markdown.
-        
-        **Theme Name**
-        *   **Master Headline** [Source A](link)
-        *   **Master Headline** [Source B](link)
-        
-        If a theme has no news, do not show it.
-        
-        Input Data:
-        {input_text}
-        """
-        
-        response = model.generate_content(prompt)
-        return response.text.strip()
+        # Helper to build prompt
+        def build_prompt(clusters_subset):
+            text = ""
+            for i, cluster in enumerate(clusters_subset):
+                text += f"\nCluster {i+1}:\n"
+                for art in cluster:
+                   text += f"- Title: {art['title']}\n  Link: {art['link']}\n  Source: {art.get('source', 'Unknown')}\n"
+            
+            return f"""
+            Act as a senior editor for a UPSC/Civil Services exam preparation portal.
+            
+            I will provide you with clusters of news articles. Each cluster contains multiple reports on the same event from different sources.
+            
+            Your Task:
+            1. **Filter**: Ignore clusters that are completely irrelevant for UPSC/SSC/Bank exams (e.g., local crime, pure political blame-games, sports trivialities).
+            2. **Synthesize**: For each relevant cluster, write a SINGLE "Master Headline" that combines the key facts from all sources in that cluster. 
+               - Example: If Source A says "India grows 7%" and Source B says "IMF praises India's reforms", Master Headline: "IMF praises India's reforms; forecasts 7% growth."
+               - **Crucial**: Include the LINK to the best 1-2 articles (preferably official sources like PIB/IMF if present) in Markdown format `[Source Name](URL)`.
+            3. **Categorize**: Group these Master Headlines under these themes:
+               - 🏛️ Polity & Governance
+               - 💰 Economy & Banking
+               - 🌍 International Relations
+               - 🔬 Science & Technology
+               - 🌱 Environment
+               - 🛡️ Defence & Security
+               - 🏫 Society & Education
+               - ⚖️ Legal & Constitutional
+               
+            Format:
+            Return the output in clean Markdown.
+            
+            **Theme Name**
+            *   **Master Headline** [Source A](link)
+            *   **Master Headline** [Source B](link)
+            
+            If a theme has no news, do not show it.
+            
+            Input Data:
+            {text}
+            """
+
+        # Try with top 25 (Standard)
+        try:
+             prompt = build_prompt(clusters[:25])
+             response = model.generate_content(prompt)
+             return response.text.strip()
+        except Exception as e_full:
+             logger.warning(f"Full digest generation failed: {e_full}. Retrying with smaller batch.")
+             # Fallback: Top 10 only
+             prompt = build_prompt(clusters[:10])
+             response = model.generate_content(prompt)
+             return response.text.strip()
             
     except Exception as e:
         logger.error(f"Error generating digest: {e}")
-        return "Failed to generate digest due to an error."
+        return f"Failed to generate digest. Error details: {str(e)}"
