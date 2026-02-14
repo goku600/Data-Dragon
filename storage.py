@@ -31,6 +31,10 @@ class ContentStorage:
                 else:
                     creds_dict = creds_json
                 
+                # FIX: Handle newline escaping issues in private_key (common in Render/Heroku)
+                if 'private_key' in creds_dict:
+                    creds_dict['private_key'] = creds_dict['private_key'].replace('\\n', '\n')
+
                 self.client = gspread.service_account_from_dict(creds_dict)
             
             # Open the sheet
