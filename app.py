@@ -90,6 +90,11 @@ async def get_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 new_articles_count += 1
             except Exception as e:
                 logger.error(f"Failed to send message: {e}")
+                
+            # Anti-Spam: Stop after sending 7 updates
+            if new_articles_count >= 7:
+                 await update.message.reply_text("Stopped after 7 updates to avoid spamding. /news again for more.")
+                 break
         
     if new_articles_count == 0:
         await update.message.reply_text("Checked latest news. No *new* relevant updates found since last check.")

@@ -90,7 +90,14 @@ def deduplicate_articles(articles):
     unique_articles = []
     
     # Sort articles by priority (important sources first)
+    # Sort articles by priority (important sources first)
     articles.sort(key=lambda x: get_priority(x['link']))
+    
+    # Optimization: Process only the top 150 articles to prevent CPU hanging on O(N^2) loop
+    # This still keeps the high-priority sources since we just sorted them to the top.
+    if len(articles) > 150:
+        logger.info(f"Limiting processing from {len(articles)} to top 150 priority articles.")
+        articles = articles[:150]
     
     for article in articles:
         is_duplicate = False
