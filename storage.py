@@ -1,5 +1,5 @@
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+
 import os
 import json
 import logging
@@ -16,28 +16,34 @@ class ContentStorage:
     def connect(self):
         """Connects to Google Sheets using credentials from env var."""
         try:
-            # We expect the JSON content to be in the GOOGLE_VARS env variable
             creds_json = os.getenv("GOOGLE_VARS")
             if not creds_json:
                 logger.error("GOOGLE_VARS environment variable not found.")
                 return
 
-            creds_dict = json.loads(creds_json)
-            # Define the scope
-            scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-            self.client = gspread.authorize(creds)
+            # Check if it's a file path or JSON content
+            if os.path.exists(creds_json):
+                 self.client = gspread.service_account(filename=creds_json)
+            else:
+                # Parse the JSON string
+                if isinstance(creds_json, str):
+                    creds_dict = json.loads(creds_json)
+                else:
+                    creds_dict = creds_json
+                
+                self.client = gspread.service_account_from_dict(creds_dict)
             
-            # Open the sheet - User must share the sheet with the service account email
+            # Open the sheet
             sheet_name = os.getenv("GOOGLE_SHEET_NAME", "NewsAggregatorBot")
             try:
                 self.sheet = self.client.open(sheet_name).sheet1
             except gspread.SpreadsheetNotFound:
-                logger.error(f"Spreadsheet '{sheet_name}' not found. Make sure to create it and share with service account.")
-                # Logic to create if not exists could go here, but requires Drive API permissions usually.
+                logger.error(f"Spreadsheet '{sheet_name}' not found. Make sure to share it with the service account email.")
                 
         except Exception as e:
             logger.error(f"Failed to connect to Google Sheets: {e}")
+            # Raise to see full trace in logs if needed
+            # raise e
 
     def article_exists(self, link):
         """Checks if a link has already been processed."""
