@@ -56,13 +56,16 @@ async def get_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new_articles_count = 0
     
     # 3. Process Articles
+    # 3. Process Articles
+    existing_links = db.get_existing_links()
+    
     for article in articles:
         link = article['link']
         title = article['title']
         summary = article['summary']
 
         # Link-based Deduplication (Exact Match)
-        if db.article_exists(link):
+        if link in existing_links:
             continue
 
         # Analyze with Gemini
@@ -85,7 +88,8 @@ async def get_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await update.message.reply_text(message)
                 db.add_article(link, analysis, article.get('published', ''))
-                # Add to local recent list so we don't send duplicates within this very loop
+                # Add to local lists
+                existing_links.add(link)
                 recent_headlines.append(analysis)
                 new_articles_count += 1
             except Exception as e:
@@ -115,13 +119,15 @@ async def digest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # NEW: Filter out clusters that have already been sent/processed
     # We check if the "representative" (first) article of the cluster is in DB.
+    existing_links = db.get_existing_links()
+    
     new_clusters = []
     for cluster in all_clusters:
         # Check top 3 articles in cluster to be safe, if any match, skip cluster
         # This prevents sending the same story just because the top link changed slightly
         is_old_story = False
         for art in cluster[:3]:
-            if db.article_exists(art['link']):
+            if art['link'] in existing_links:
                 is_old_story = True
                 break
         
@@ -138,12 +144,14 @@ async def digest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 4. Save to Database (Mark as processed)
     # We assume if it was in 'new_clusters', it's included in the digest.
     count = 0
+    
     for cluster in new_clusters:
         for art in cluster:
             # We save the original title since we don't have the Master Headline mapped 1:1 easily here
             # This is sufficient for the 'article_exists' check later.
-            if not db.article_exists(art['link']):
+            if art['link'] not in existing_links:
                 db.add_article(art['link'], f"[Digest] {art['title']}", art.get('published', ''))
+                existing_links.add(art['link'])
                 count += 1
     
     logger.info(f"Marked {count} articles as processed from digest.")

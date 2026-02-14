@@ -49,21 +49,20 @@ class ContentStorage:
             # Raise to see full trace in logs if needed
             # raise e
 
-    def article_exists(self, link):
-        """Checks if a link has already been processed."""
+    def get_existing_links(self):
+        """Fetches all existing links from the sheet (Column 3)."""
         if not self.sheet:
-            return False
+            return set()
         try:
-            # Reading all links from the first column (assuming simple 1-col storage for now or searching)
-            # To be efficient, we might cache this or use find. 
-            # find is better.
-            cell = self.sheet.find(link)
-            return cell is not None
-        except gspread.CellNotFound:
-            return False
+            # Column 3 contains the links
+            links = self.sheet.col_values(3)
+            # Remove header if present (assuming first row is header)
+            if links and links[0] == 'Link':  # Adjust 'Link' if your header is different
+                return set(links[1:])
+            return set(links)
         except Exception as e:
-            logger.error(f"Error checking existence: {e}")
-            return False
+            logger.error(f"Error fetching tokens: {e}")
+            return set()
 
     def add_article(self, link, headline, published_date=""):
         """Adds a processed article to the sheet."""
