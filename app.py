@@ -206,8 +206,11 @@ def main():
     logger.info(f"Starting Bot Instance with Session ID: {session_id}")
 
     logger.info("Bot is polling...")
+    import telegram.error
     try:
         application.run_polling(drop_pending_updates=True) # Optional: drop pending to avoid processing old stuff
+    except telegram.error.Conflict:
+        logger.error("❌ CONFLICT ERROR: Another bot instance is running! Please stop the Render instance before running locally.")
     except Exception as e:
         logger.error(f"Polling error: {e}")
 
