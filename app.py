@@ -2,6 +2,7 @@ import os
 import logging
 import asyncio
 import threading
+import uuid
 from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
@@ -54,6 +55,7 @@ async def get_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
     recent_headlines = db.get_recent_headlines(limit=50)
 
     new_articles_count = 0
+    articles_to_add = []
     
     # 3. Process Articles
     # 3. Process Articles
@@ -84,11 +86,14 @@ async def get_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 continue
 
             # It's relevant and unique!
+            # It's relevant and unique!
             message = f"📰 {analysis}\n🔗 {link}"
             try:
                 await update.message.reply_text(message)
-                db.add_article(link, analysis, article.get('published', ''))
-                # Add to local lists
+                # db.add_article(link, analysis, article.get('published', '')) -- DEFERRED
+                
+                # Add to local lists and batch buffer
+                articles_to_add.append((link, analysis, article.get('published', '')))
                 existing_links.add(link)
                 recent_headlines.append(analysis)
                 new_articles_count += 1
@@ -99,6 +104,10 @@ async def get_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if new_articles_count >= 7:
                  await update.message.reply_text("Stopped after 7 updates to avoid spamding. /news again for more.")
                  break
+        
+    # Batch write to DB
+    if articles_to_add:
+        db.add_articles(articles_to_add)
         
     if new_articles_count == 0:
         await update.message.reply_text("Checked latest news. No *new* relevant updates found since last check.")
@@ -141,20 +150,22 @@ async def digest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 3. Generate Digest via Gemini
     digest_text = content_analyzer.generate_digest_feed(new_clusters)
     
-    # 4. Save to Database (Mark as processed)
+    # 4. Save to Database (Mark as processed) - BATCHED
     # We assume if it was in 'new_clusters', it's included in the digest.
-    count = 0
+    articles_to_add = []
     
     for cluster in new_clusters:
         for art in cluster:
             # We save the original title since we don't have the Master Headline mapped 1:1 easily here
             # This is sufficient for the 'article_exists' check later.
             if art['link'] not in existing_links:
-                db.add_article(art['link'], f"[Digest] {art['title']}", art.get('published', ''))
+                articles_to_add.append((art['link'], f"[Digest] {art['title']}", art.get('published', '')))
                 existing_links.add(art['link'])
-                count += 1
+                
+    if articles_to_add:
+        db.add_articles(articles_to_add)
     
-    logger.info(f"Marked {count} articles as processed from digest.")
+    logger.info(f"Marked {len(articles_to_add)} articles as processed from digest.")
 
     # 5. Send (Split if too long)
     # Telegram limit is 4096 chars.
@@ -191,8 +202,14 @@ def main():
     application.add_handler(CommandHandler("news", get_news))
     application.add_handler(CommandHandler("digest", digest))
 
+    session_id = str(uuid.uuid4())[:8]
+    logger.info(f"Starting Bot Instance with Session ID: {session_id}")
+
     logger.info("Bot is polling...")
-    application.run_polling()
+    try:
+        application.run_polling(drop_pending_updates=True) # Optional: drop pending to avoid processing old stuff
+    except Exception as e:
+        logger.error(f"Polling error: {e}")
 
 if __name__ == '__main__':
     main()

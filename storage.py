@@ -64,6 +64,26 @@ class ContentStorage:
             logger.error(f"Error fetching tokens: {e}")
             return set()
 
+    def add_articles(self, articles_list):
+        """Adds multiple processed articles to the sheet in one go."""
+        if not self.sheet or not articles_list:
+            return
+        
+        try:
+            # articles_list should be a list of tuples/lists: [link, headline, published_date]
+            rows = []
+            current_time = str(datetime.now())
+            for article in articles_list:
+                # Columns: Processed Time, Published Time, Link, Headline
+                # Ensure order matches add_article: [Time, Date, Link, Headline]
+                link, headline, published_date = article
+                rows.append([current_time, published_date, link, headline])
+            
+            self.sheet.append_rows(rows)
+            logger.info(f"Batch added {len(rows)} articles to sheet.")
+        except Exception as e:
+            logger.error(f"Error adding articles batch: {e}")
+
     def add_article(self, link, headline, published_date=""):
         """Adds a processed article to the sheet."""
         if not self.sheet:

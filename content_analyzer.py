@@ -23,7 +23,7 @@ def analyze_news(article_title, article_summary):
         return None
 
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = f"""
         Act as a strict news content filter for a student preparing for UPSC (Civil Services), SSC, and Bank exams in India.
@@ -68,7 +68,7 @@ def generate_digest_feed(clusters):
     # Limit to top 20 clusters to avoid token limits if necessary, or just send all if manageable.
     # For now, let's take top 30 clusters.
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         # ... (Prompt construction logic remains, but we need to ensure input_text is defined) ...
         # Retrying the prompt construction inside the try block to handle retries cleanly would be better, 
