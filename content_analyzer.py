@@ -15,10 +15,24 @@ else:
 # Debug: List available models
 AVAILABLE_MODELS = []
 try:
+    import pkg_resources
+    try:
+        version = pkg_resources.get_distribution("google-generativeai").version
+        logger.info(f"Google Generative AI SDK Version: {version}")
+    except:
+        logger.info("Could not determine SDK version")
+
+    logger.info("Attempting to list available Gemini models...")
     for m in genai.list_models():
+        logger.info(f"Found Model: {m.name} | Methods: {m.supported_generation_methods}")
         if 'generateContent' in m.supported_generation_methods:
-            logger.info(f"Available Model: {m.name}")
             AVAILABLE_MODELS.append(m.name)
+            
+    if not AVAILABLE_MODELS:
+        logger.error("CRITICAL: No models found with 'generateContent' capability! Check API Key permissions or Region.")
+    else:
+        logger.info(f"Usable Models: {AVAILABLE_MODELS}")
+
 except Exception as e:
     logger.error(f"Failed to list models: {e}")
 
@@ -60,8 +74,10 @@ def generate_with_fallback(prompt):
     candidates = [
         'gemini-1.5-flash',
         'gemini-1.5-flash-001',
+        'gemini-1.5-flash-8b',
+        'gemini-1.5-pro-latest',
         'gemini-1.5-pro',
-        'gemini-pro'
+        'gemini-1.0-pro'
     ]
     
     last_error = None
