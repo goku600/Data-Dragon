@@ -12,6 +12,78 @@ if GOOGLE_API_KEY:
 else:
     logger.warning("GOOGLE_API_KEY not found in environment variables.")
 
+# Debug: List available models
+AVAILABLE_MODELS = []
+try:
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            logger.info(f"Available Model: {m.name}")
+            AVAILABLE_MODELS.append(m.name)
+except Exception as e:
+    logger.error(f"Failed to list models: {e}")
+
+def get_generative_model():
+    """
+    Returns a workable Gemini model, trying a list of candidates.
+    Matches against what's actually available if list_models succeeded.
+    """
+    # Priority list
+    candidates = [
+        'models/gemini-1.5-flash',
+        'models/gemini-1.5-flash-001',
+        'models/gemini-1.5-flash-latest',
+        'models/gemini-1.5-pro',
+        'models/gemini-pro'
+    ]
+    
+    # 1. Try to find a match in available models first (if listing worked)
+    if AVAILABLE_MODELS:
+        for cand in candidates:
+            # Check exact match or short name match (e.g. 'gemini-1.5-flash' matching 'models/gemini-1.5-flash')
+            for avail in AVAILABLE_MODELS:
+                if cand in avail or avail in cand:
+                    logger.info(f"Selected model from available list: {avail}")
+                    return genai.GenerativeModel(avail)
+
+    # 2. If listing failed or no match, rely on try/fallback during generation, 
+    # but initially return the best bet.
+    # We will return the first candidate, but let's actually implement the retry logic *inside* the generate call
+    # instead of just returning a model object.
+    
+    # For now, let's return the standard one, and we'll handle 404s in the usage.
+    return genai.GenerativeModel('gemini-1.5-flash')
+
+def generate_with_fallback(prompt):
+    """
+    Tries to generate content using multiple model names if one fails with 404.
+    """
+    candidates = [
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-001',
+        'gemini-1.5-pro',
+        'gemini-pro'
+    ]
+    
+    last_error = None
+    for model_name in candidates:
+        try:
+            logger.info(f"Trying Gemini Model: {model_name}")
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            return response.text.strip()
+        except Exception as e:
+            logger.warning(f"Model {model_name} failed: {e}")
+            last_error = e
+            # Only continue if it's a 404 or resource not found type error
+            if "404" in str(e) or "not found" in str(e).lower():
+                continue
+            else:
+                # If it's a quota error or other logic error, might not help to switch models, 
+                # but let's try anyway for now as safety.
+                continue
+                
+    raise last_error
+
 def analyze_news(article_title, article_summary):
     """
     Analyzes a news article to check relevance for UPSC/SSC/Bank exams.
@@ -23,8 +95,6 @@ def analyze_news(article_title, article_summary):
         return None
 
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
         prompt = f"""
         Act as a strict news content filter for a student preparing for UPSC (Civil Services), SSC, and Bank exams in India.
         
@@ -44,8 +114,7 @@ def analyze_news(article_title, article_summary):
            - Do not start with "Relevant" or "Headline:". Just the line.
         """
         
-        response = model.generate_content(prompt)
-        text = response.text.strip()
+        text = generate_with_fallback(prompt)
         
         if text.upper() == "NO":
             return None
@@ -122,14 +191,14 @@ def generate_digest_feed(clusters):
         # Try with top 25 (Standard)
         try:
              prompt = build_prompt(clusters[:25])
-             response = model.generate_content(prompt)
-             return response.text.strip()
+             text = generate_with_fallback(prompt)
+             return text
         except Exception as e_full:
              logger.warning(f"Full digest generation failed: {e_full}. Retrying with smaller batch.")
              # Fallback: Top 10 only
              prompt = build_prompt(clusters[:10])
-             response = model.generate_content(prompt)
-             return response.text.strip()
+             text = generate_with_fallback(prompt)
+             return text
             
     except Exception as e:
         logger.error(f"Error generating digest: {e}")

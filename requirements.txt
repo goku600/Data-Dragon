@@ -1,8 +1,8 @@
 python-telegram-bot
-google-generativeai
+google-generativeai>=0.7.0
 feedparser
 python-dotenv
 flask
-gspread
+gspread>=6.0.0
 oauth2client
 gunicorn
